@@ -1,0 +1,5 @@
+*.o
+getscancodes
+evdev_map
+key_names.h
+xi2watch
