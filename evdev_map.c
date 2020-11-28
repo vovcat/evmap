@@ -1,4 +1,32 @@
 /*
+ * evdev_map -- manipulate evdev keycode tables
+ *
+ * Nicolas George, 2020-08-03
+ * Public domain
+ */
+
+/*
+$ ./evdev_map -d /dev/input/event8 -p
+index scancode    keycode name
+    0 00100057       0xe0 BRIGHTNESSDOWN
+    1 00100058       0xe1 BRIGHTNESSUP
+    2 00100150       0xf8 MICMUTE
+    3 00100850       0x94 PROG1
+    4 00100851       0x95 PROG2
+    5 00100852       0xca PROG3
+    6 0000e005       0xe0 BRIGHTNESSDOWN
+    7 0000e006       0xe1 BRIGHTNESSUP
+    8 0000e007       0xec BATTERY
+    9 0000e009       0xa1 EJECTCD
+   10 0000e00b       0xe3 SWITCHVIDEOMODE
+   11 0000e011       0xee WLAN
+   12 0000e025       0xcb PROG4
+   13 0000e027      0x1af BRIGHTNESS_TOGGLE
+   14 0000e029       0xcb PROG4
+*/
+
+/*
+
 Multiple keyboard layouts on the Linux console
 https://lists.debian.org/debian-user/2020/08/msg00179.html
 
@@ -98,24 +126,17 @@ Regards,
   Nicolas George
 
 ----8<----8<----8<----8<---- evdev_map.c ---->8---->8---->8---->8----
-*/
 
-/*
- * evdev_map -- manipulate evdev keycode tables
- *
- * Nicolas George, 2020-08-03
- * Public domain
- */
+*/
 
 /*
    Building:
 
    First, generate the table of key names:
 
-   gcc -E -dM -x c - <<<'#include <linux/input-event-codes.h>' |
-   perl -ne \
+   gcc -E -dM -x c - <<< '#include <linux/input-event-codes.h>' |perl -ne \
     'if (/^\#define (KEY_(\w+))\s+\S+/) { print "  { $1, \"$2\" },\n" }' \
-    > /tmp/key_names.h
+    > key_names.h
 
    Then:
 
@@ -141,7 +162,7 @@ typedef struct Key_name {
 } Key_name;
 
 static const Key_name key_names[] = {
-#include "key_names.h"
+#include "key_names.inc"
 };
 
 static void
@@ -196,8 +217,32 @@ get_key_by_name(const char *name)
     return code;
 }
 
-static void
-print_keymap(int dev)
+/**
+ * struct input_keymap_entry - used by EVIOCGKEYCODE/EVIOCSKEYCODE ioctls
+ * @scancode: scancode represented in machine-endian form.
+ * @len: length of the scancode that resides in @scancode buffer.
+ * @index: index in the keymap, may be used instead of scancode
+ * @flags: allows to specify how kernel should handle the request. For
+ *      example, setting INPUT_KEYMAP_BY_INDEX flag indicates that kernel
+ *      should perform lookup in keymap by @index instead of @scancode
+ * @keycode: key code assigned to this scancode
+ *
+ * The structure is used to retrieve and modify keymap data. Users have
+ * option of performing lookup either by @scancode itself or by @index
+ * in keymap entry. EVIOCGKEYCODE will also return scancode or index
+ * (depending on which element was used to perform lookup).
+
+struct input_keymap_entry {
+#define INPUT_KEYMAP_BY_INDEX   (1 << 0)
+        __u8  flags;
+        __u8  len;
+        __u16 index;
+        __u32 keycode;
+        __u8  scancode[32];
+};
+ */
+
+static void print_keymap(int dev)
 {
     struct input_keymap_entry ke;
     char scancode[sizeof(ke.scancode) * 2 + 1];
@@ -206,6 +251,8 @@ print_keymap(int dev)
     int ret;
 
     check_device(dev);
+    printf("%5s %8s %10s %s\n", "index", "scancode", "keycode", "name");
+
     for (i = 0; i < 0x10000; i++) {
         ke.index = i;
         ke.flags = INPUT_KEYMAP_BY_INDEX;
@@ -228,7 +275,7 @@ print_keymap(int dev)
         }
         scancode_to_string(scancode, ke.scancode, ke.len);
         name = get_key_by_code(ke.keycode);
-        printf("%5d %s %#10x %s\n", ke.index, scancode, ke.keycode,
+        printf("%5d %8s %#10x %s\n", ke.index, scancode, ke.keycode,
             name == NULL ? "?" : name);
     }
     fflush(stdout);
@@ -243,9 +290,18 @@ set_keycode(int dev, const char *def)
     unsigned c, i;
 
     check_device(dev);
+
+    ke.flags = 0;
+    ke.index = 0;
+
+    off = 0;
+    if (sscanf(def, "%hu:%n", &ke.index, &off) == 1 && off) {
+        ke.flags |= INPUT_KEYMAP_BY_INDEX;
+        def += off;
+    }
+
     sep = strchr(def, '=');
-    if (sep == NULL ||
-        (size_t)(sep - def) > 2 * sizeof(ke.scancode) ||
+    if (sep == NULL || (size_t)(sep - def) > 2 * sizeof(ke.scancode) ||
         (sep - def) % 2 != 0) {
         fprintf(stderr, "Invalid definition: %s\n", def);
         exit(1);
@@ -270,14 +326,15 @@ set_keycode(int dev, const char *def)
     }
     ke.keycode = get_key_by_name(sep + 1);
     ret = ioctl(dev, EVIOCSKEYCODE_V2, &ke);
+    fprintf(stderr, "Setting keymap[%d] with flags=%x: scancode=%08x len=%d ke.keycode=%#x returned %d\n",
+        ke.index, ke.flags, *(int*)&ke.scancode, ke.len, ke.keycode, ret);
     if (ret < 0) {
         perror("ioctl(EVIOCSKEYCODE_V2)");
         exit(1);
     }
 }
 
-static void
-usage(int ret)
+static void usage(int ret)
 {
     FILE *out = ret ? stderr : stdout;
 
@@ -285,12 +342,12 @@ usage(int ret)
         "evdev_map -- manipulate evdev keycode tables\n"
         "Usage: evdev_map -d device [-p] [-s scancode=keycode]\n"
         "\n"
-        "    -d device            select the input device\n"
-        "    -p                   print the current map\n"
-        "                         columns: index scancode keycode key_name\n"
-        "    -s scancode=keycode  change the mapping for a scancode\n"
-        "                         (key names work too; use 0x0 for RESERVED)\n"
-        "    -h                   print this message\n"
+        "    -d device                  select the input device\n"
+        "    -p                         print the current map\n"
+        "                               columns: index scancode keycode key_name\n"
+        "    -s [idx:]scancode=keycode  change the mapping for a scancode\n"
+        "                               (key names work too; use 0x0 for RESERVED)\n"
+        "    -h                         print this message\n"
         "Options are processed in order and can be repeated.\n"
         );
     fflush(out);
@@ -298,14 +355,12 @@ usage(int ret)
         exit(ret);
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-    int dev = -1, opt;
+    int dev = -1, opt, act = 0;
 
     while ((opt = getopt(argc, argv, "d:ps:h")) >= 0) {
         switch (opt) {
-
             case 'd':
                 if (dev >= 0)
                     close(dev);
@@ -318,10 +373,12 @@ main(int argc, char **argv)
 
             case 'p':
                 print_keymap(dev);
+                act = 1;
                 break;
 
             case 's':
                 set_keycode(dev, optarg);
+                act = 1;
                 break;
 
             case 'h':
@@ -334,7 +391,9 @@ main(int argc, char **argv)
 
         }
     }
-    if (optind < argc)
+
+    if (optind < argc || !act)
         usage(1);
+
     return 0;
 }

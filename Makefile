@@ -1,29 +1,24 @@
-TARGET = getscancodes
-SOURCES = getscancodes.c
+TARGETS = getscancodes evdev_map xi2watch
+SOURCES = $(addsuffix .c,$(TARGETS))
+OBJECTS = $(SOURCES:.c=.o) key_names.inc
 
-CFLAGS=-O2 -Wall
-CC=gcc
+$(info SOURCES=$(SOURCES))
 
-OBJECTS=$(SOURCES:.c=.o)
+CC=c99
+CFLAGS=-Wall -Wextra -g -O0
 
-all: $(TARGET) evdev_map xi2watch
+all: $(TARGETS)
+clean:; $(RM) $(TARGETS) $(OBJECTS)
 
-cc:
-	$(MAKE) CC=cc \
-		all
+getscancodes: getscancodes.c
 
-$(TARGET): $(OBJECTS)
-	$(CC) -o  $@ $(OBJECTS)
+key_names.inc: $(FORCE)
+	gcc -xc -E -dM - <<< '#include <linux/input-event-codes.h>' |sort -k3n |	\
+	    perl -ne 'print qq|  { $$1, "$$2" },\n| if m/^#define (KEY_(\w+))\s+\S+/'	\
+	    > $@
+evdev_map.c: key_names.inc
+evdev_map: CFLAGS+=-D_XOPEN_SOURCE=600
+evdev_map: evdev_map.c
 
-clean:
-	$(RM) $(TARGET) $(OBJECTS) evdev_map key_names.h xi2watch
-
-key_names.h: $(FORCE)
-	gcc -E -dM -x c - <<< '#include <linux/input-event-codes.h>' | \
-	   perl -ne 'if (/^\#define (KEY_(\w+))\s+\S+/) { print "  { $$1, \"$$2\" },\n" }' \
-	   > key_names.h
-
-evdev_map: evdev_map.c key_names.h
-	c99 -Wall -Wextra -D_XOPEN_SOURCE=600 -g -O2 -o evdev_map evdev_map.c
+xi2watch: LDLIBS+=-lX11 -lXi
 xi2watch: xi2watch.c
-	gcc -Wall -std=c99 -o xi2watch xi2watch.c -lX11 -lXi

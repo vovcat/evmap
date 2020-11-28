@@ -36,10 +36,9 @@ Date of last change: 3-Sept-2005
 #define EV_SYN 0
 #endif
 
-int
-main (int argc, char **argv)
+int main (int argc, char **argv)
 {
-	int fd, rd, i;
+	int fd, rd;
 	struct input_event ev[64];
 	int version;
 	unsigned short id[4];
@@ -78,13 +77,13 @@ main (int argc, char **argv)
 		rd = read(fd, ev, sizeof(struct input_event) * 64);
 
 		if (rd < (int) sizeof(struct input_event)) {
-			printf("yyy\n");
-			perror("\ngetscancodes: error reading");
+			perror("getscancodes: error reading");
 			return 1;
 		}
 
-		for (i = 0; i < rd / sizeof(struct input_event); i++)
-		{
+		for (unsigned i = 0; i < rd / sizeof(struct input_event); i++) {
+			printf("got input_event[%d] type=%d code=%d value=%d (0x%x)\n",
+			    i, ev[i].type, ev[i].code, ev[i].value, ev[i].value);
 			if (ev[i].type != EV_SYN &&
 			    ev[i].type == EV_MSC &&
 			    (ev[i].code == MSC_RAW || ev[i].code == MSC_SCAN))

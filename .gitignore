@@ -1,5 +1,5 @@
 *.o
 getscancodes
 evdev_map
-key_names.h
+key_names.inc
 xi2watch

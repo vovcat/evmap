@@ -1,3 +1,4 @@
+// c99 -Wall -Wextra -g -O0 -o xi2watch xi2watch.c -lX11 -lXi
 /*
 X11 and hot-plugged keyboards and multiple layouts
 https://lists.debian.org/debian-user/2020/02/msg00755.html
