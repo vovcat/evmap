@@ -1,12 +1,12 @@
 /*
- * evdev_map -- manipulate evdev keycode tables
+ * evmap -- manipulate evdev keycode tables
  *
  * Nicolas George, 2020-08-03
  * Public domain
  */
 
 /*
-$ ./evdev_map -d /dev/input/event8 -p
+$ ./evmap -d /dev/input/event8 -p
 index scancode    keycode name
     0 00100057       0xe0 BRIGHTNESSDOWN
     1 00100058       0xe1 BRIGHTNESSUP
@@ -84,7 +84,7 @@ data to appear each time the key is pressed. Let us say it is
 
 Next, let us find the default layout:
 
-sudo /usr/local/sbin/evdev_map -d /dev/input/event6 -p
+sudo /usr/local/sbin/evmap -d /dev/input/event6 -p
 ...
   569 000c023b       0xf0 (UNKNOWN)
   570 000c023c       0xf0 (UNKNOWN)
@@ -96,7 +96,7 @@ sudo /usr/local/sbin/evdev_map -d /dev/input/event6 -p
 The offending key seems to have scan code 00010081. Let us try to remap
 it:
 
-sudo /usr/local/sbin/evdev_map -d /dev/input/event6 -s 00010081=A
+sudo /usr/local/sbin/evmap -d /dev/input/event6 -s 00010081=A
 
 if pressing the key now produces a 'a', we have won. Otherwise, maybe
 there is another scan code mapped to the same key code, keyboards often
@@ -107,7 +107,7 @@ key ("0" would mean the char '0'). It is a job for udev:
 
 UBSYSTEM=="input", ACTION=="add|change", \
   ATTRS{name}=="USB-compliant keyboard System Control", \
-  RUN+="/usr/local/sbin/evdev_map -d $devnode -s 00010081=0x0"
+  RUN+="/usr/local/sbin/evmap -d $devnode -s 00010081=0x0"
 
 (I will not develop here how to use udevadm info -a -p
 /sys/class/input/event6 to get the conditions that allow to identify
@@ -125,7 +125,7 @@ Regards,
 --
   Nicolas George
 
-----8<----8<----8<----8<---- evdev_map.c ---->8---->8---->8---->8----
+----8<----8<----8<----8<---- evmap.c ---->8---->8---->8---->8----
 
 */
 
@@ -140,7 +140,7 @@ Regards,
 
    Then:
 
-   c99 -Wall -Wextra -D_XOPEN_SOURCE=600 -g -O2 -o evdev_map evdev_map.c
+   c99 -Wall -Wextra -D_XOPEN_SOURCE=600 -g -O2 -o evmap evmap.c
 
 */
 
@@ -339,8 +339,8 @@ static void usage(int ret)
     FILE *out = ret ? stderr : stdout;
 
     fprintf(out,
-        "evdev_map -- manipulate evdev keycode tables\n"
-        "Usage: evdev_map -d device [-p] [-s scancode=keycode]\n"
+        "evmap -- manipulate evdev keycode tables\n"
+        "Usage: evmap -d device [-p] [-s scancode=keycode]\n"
         "\n"
         "    -d device                  select the input device\n"
         "    -p                         print the current map\n"

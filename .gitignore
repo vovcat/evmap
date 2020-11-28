@@ -1,5 +1,5 @@
 *.o
 getscancodes
-evdev_map
+evmap
 key_names.inc
 xi2watch
