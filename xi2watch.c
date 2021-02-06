@@ -1,5 +1,6 @@
 // c99 -Wall -Wextra -g -O0 -o xi2watch xi2watch.c -lX11 -lXi
 /*
+
 X11 and hot-plugged keyboards and multiple layouts
 https://lists.debian.org/debian-user/2020/02/msg00755.html
 
@@ -253,8 +254,7 @@ Regards,
 
 static Display *display;
 
-static void
-connect_events(void)
+static void connect_events(void)
 {
     XIEventMask m = { 0 };
 
@@ -268,8 +268,7 @@ connect_events(void)
     free(m.mask);
 }
 
-static void
-run_command(char **cmd, XIHierarchyInfo *info)
+static void run_command(char **cmd, XIHierarchyInfo *info)
 {
     XIDeviceInfo *devices;
     char idbuf[32], typebuf[32], *type;
@@ -319,14 +318,15 @@ run_command(char **cmd, XIHierarchyInfo *info)
         perror("exec");
         _exit(1);
     }
+
     waitpid(child, &status, 0);
     if (status != 0)
         fprintf(stderr, "Child failed\n");
+
     XIFreeDeviceInfo(devices);
 }
 
-static void
-hierarchy_changed(XIHierarchyEvent *ev, char **cmd)
+static void hierarchy_changed(XIHierarchyEvent *ev, char **cmd)
 {
     int i;
     XIHierarchyInfo *info;
@@ -338,14 +338,13 @@ hierarchy_changed(XIHierarchyEvent *ev, char **cmd)
     }
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     XEvent ev;
     int xi_major, xi_event, xi_error;
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: xi2watch command [args]\n");
+        fprintf(stderr, "Usage: xi2watch /path/to/handler [handler args]\n");
         exit(1);
     }
     display = XOpenDisplay(NULL);
@@ -357,15 +356,17 @@ main(int argc, char **argv)
         fprintf(stderr, "XI2 not available\n");
         exit(1);
     }
+
     connect_events();
+
     while (1) {
         XNextEvent(display, &ev);
-        if (ev.type == GenericEvent &&
-            ev.xcookie.extension == xi_major &&
+        if (ev.type == GenericEvent && ev.xcookie.extension == xi_major &&
             XGetEventData(display, &ev.xcookie)) {
             if (ev.xcookie.evtype == XI_HierarchyChanged)
                 hierarchy_changed(ev.xcookie.data, argv + 1);
         }
     }
+
     return 0;
 }

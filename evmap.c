@@ -384,10 +384,10 @@ int main(int argc, char **argv)
 
             case 'h':
                 usage(0);
+                act = 1;
                 break;
 
             default:
-                usage(1);
                 break;
 
         }
