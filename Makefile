@@ -16,7 +16,7 @@ getscancodes: getscancodes.c
 key_names.inc: SCRIPT='$$v = int($$3)||oct($$3), printf(qq|  { %s, "%s" }, // %d 0x%x\n|, \
 	$$1, $$2, $$v, $$v) if m/^\#define (KEY_(\w+))\s+(\d\S*)/'
 key_names.inc: Makefile
-	gcc -xc -E -dM - <<< '#include <linux/input.h>' |\
+	echo '#include <linux/input.h>' | gcc -xc -E -dM - |\
 	perl -ne $(SCRIPT) |sort -k6n >$@
 
 evmap.o: key_names.inc
